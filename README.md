@@ -8,8 +8,81 @@ Capture web articles as rich Obsidian notes with AI-generated summaries.
 
 Glean is a Node.js CLI tool that transforms a URL into a fully catalogued knowledge entry in a single command. It extracts web article content, generates structured AI summaries via Claude, and stores the result as a rich Obsidian note with YAML frontmatter and a searchable Base view.
 
+### Core Pipeline
+
+```mermaid
+flowchart LR
+    A["🌐 URL"] --> B["📄 Extract"]
+    B --> C["🤖 Summarise"]
+    C --> D["📝 Generate Note"]
+    D --> E["💾 Write to Vault"]
+    E --> F["📊 Update Index\n& Base Views"]
+
+    B -- "defuddle" --> B
+    C -- "Claude CLI" --> C
+    D -- "YAML frontmatter\n+ Markdown" --> D
+    E -- "Obsidian vault" --> E
 ```
-URL -> defuddle (parse & extract) -> Claude (summarise) -> Obsidian (store & index)
+
+### Async vs Sync Execution
+
+By default, Glean runs in **async mode** — content extraction happens in the foreground (1-3 seconds), then summarisation is handed off to a background worker. Use `--sync` to wait for the full pipeline inline.
+
+```mermaid
+flowchart TD
+    Start(["glean &lt;url&gt;"]) --> Extract["Extract content\n(1-3 sec)"]
+
+    Extract --> Mode{--sync?}
+
+    Mode -- "Yes" --> SyncSum["Summarise via Claude"]
+    SyncSum --> SyncNote["Generate & write note"]
+    SyncNote --> Done(["✅ Done"])
+
+    Mode -- "No (default)" --> Enqueue["Enqueue job\n(SQLite)"]
+    Enqueue --> Spawn["Spawn background\nworker"]
+    Spawn --> Return(["✅ Terminal returned"])
+
+    Spawn -.-> Worker["Worker process"]
+    Worker --> WSum["Summarise via Claude"]
+    WSum --> WNote["Generate & write note"]
+    WNote --> Notify(["🔔 macOS notification"])
+
+    style Return fill:#d4edda,stroke:#28a745
+    style Notify fill:#d4edda,stroke:#28a745
+    style Done fill:#d4edda,stroke:#28a745
+```
+
+### Queue & Worker Architecture
+
+The durable SQLite-backed queue survives crashes, laptop sleep, and retries failed jobs automatically.
+
+```mermaid
+flowchart LR
+    subgraph CLI ["CLI Process"]
+        G["glean &lt;url&gt;"] --> EX["Extract"]
+        EX --> EQ["Enqueue job"]
+    end
+
+    subgraph Queue ["SQLite Queue (~/.glean/glean.db)"]
+        EQ --> Q[("pending\njobs")]
+        Q --> CL["Claim"]
+    end
+
+    subgraph BG ["Background Worker"]
+        CL --> PR["Process job"]
+        PR --> OK{"Success?"}
+        OK -- "Yes" --> CO["Complete\n+ Notify"]
+        OK -- "No" --> FL["Fail\n(auto-retry)"]
+        FL -.-> Q
+    end
+
+    subgraph Mgmt ["Queue Management"]
+        ST["glean status"]
+        RT["glean retry"]
+        CLR["glean clear"]
+    end
+
+    Mgmt -.-> Q
 ```
 
 ## Features
