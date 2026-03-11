@@ -9,6 +9,7 @@ const DEFAULTS = {
   folder: "Glean",
   defaultTags: ["glean"],
   model: "haiku",
+  dbPath: path.join(os.homedir(), ".glean", "glean.db"),
   categories: [
     "engineering-management",
     "tools-and-libraries",
