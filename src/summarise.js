@@ -49,6 +49,7 @@ const summarySchema = JSON.stringify({
         "news",
       ],
     },
+    tweetSummary: { type: "string" },
   },
   required: [
     "title",
@@ -112,7 +113,8 @@ Generate a structured summary with the following fields:
 - topics: 3-7 topic tags relevant to the content (lowercase, hyphenated)
 - category: One of: engineering-management, tools-and-libraries, ai, software-engineering, leadership, devops, architecture, career, other
 - readingTimeMinutes: Estimated reading time of the original article
-- sentiment: One of: informative, opinion, tutorial, case-study, research, news`;
+- sentiment: One of: informative, opinion, tutorial, case-study, research, news
+- tweetSummary: A compelling tweet-length summary of the article (maximum 170 characters, no hashtags, no URL — the URL will be appended automatically)`;
 }
 
 /**

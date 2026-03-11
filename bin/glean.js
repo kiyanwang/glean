@@ -26,6 +26,7 @@ program
   .option('--model <model>', 'AI model for summarisation (haiku, sonnet, opus)')
   .option('--config <path>', 'Path to config file')
   .option('--sync', 'Run synchronously (wait for summarisation)', false)
+  .option('--tweet', 'Open a pre-filled tweet with the article summary', false)
   .action(async (url, options) => {
     try {
       // Use synchronous path for: --sync, --dry-run, --json.

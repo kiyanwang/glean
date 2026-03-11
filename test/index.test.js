@@ -105,6 +105,11 @@ vi.mock("fs", async (importOriginal) => {
   };
 });
 
+vi.mock("../src/tweet.js", () => ({
+  composeTweet: vi.fn(),
+  openTweetIntent: vi.fn(),
+}));
+
 vi.mock("../src/queue.js", () => ({
   findPendingJobByUrl: vi.fn(),
   enqueueJob: vi.fn(),
@@ -127,6 +132,7 @@ const { generateNote } = await import("../src/note.js");
 
 const { spawn } = await import("child_process");
 const { existsSync, readFileSync: mockedReadFileSync } = await import("fs");
+const { composeTweet, openTweetIntent } = await import("../src/tweet.js");
 const { findPendingJobByUrl, enqueueJob } = await import("../src/queue.js");
 
 // Import the functions under test.
@@ -331,6 +337,75 @@ describe("glean orchestration (index.js)", () => {
     // writeNote should NOT have been called since summarisation failed.
     expect(writeNote).not.toHaveBeenCalled();
     expect(updateIndex).not.toHaveBeenCalled();
+  });
+
+  it("--tweet opens intent URL after note creation", async () => {
+    setupHappyPath();
+    composeTweet.mockReturnValue("Great article https://martinfowler.com/articles/platform-prerequisites.html");
+
+    const stderrSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await glean(TEST_URL, { vaultPath: "/vault", folder: "Glean", tweet: true });
+
+    expect(composeTweet).toHaveBeenCalledWith(
+      claudeResponse.tweetSummary,
+      TEST_URL,
+      claudeResponse.title,
+    );
+    expect(openTweetIntent).toHaveBeenCalledWith(
+      "Great article https://martinfowler.com/articles/platform-prerequisites.html",
+    );
+
+    stderrSpy.mockRestore();
+  });
+
+  it("--tweet --dry-run prints tweet text without opening browser", async () => {
+    setupHappyPath();
+    composeTweet.mockReturnValue("Great article https://martinfowler.com/articles/platform-prerequisites.html");
+
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const stderrSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    const result = await glean(TEST_URL, {
+      vaultPath: "/vault",
+      folder: "Glean",
+      dryRun: true,
+      tweet: true,
+    });
+
+    // Should print tweet text to stderr.
+    expect(stderrSpy.mock.calls.some((c) => c[0].includes("Tweet:"))).toBe(true);
+
+    // Should NOT open the browser.
+    expect(openTweetIntent).not.toHaveBeenCalled();
+
+    // Result should include tweet field.
+    expect(result.tweet).toBe("Great article https://martinfowler.com/articles/platform-prerequisites.html");
+
+    consoleSpy.mockRestore();
+    stderrSpy.mockRestore();
+  });
+
+  it("--tweet --json includes tweet field in output", async () => {
+    setupHappyPath();
+    composeTweet.mockReturnValue("Great article https://martinfowler.com/articles/platform-prerequisites.html");
+
+    const consoleSpy = vi.spyOn(console, "log").mockImplementation(() => {});
+    const stderrSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await glean(TEST_URL, {
+      vaultPath: "/vault",
+      folder: "Glean",
+      json: true,
+      tweet: true,
+    });
+
+    const outputArg = consoleSpy.mock.calls[0][0];
+    const parsed = JSON.parse(outputArg);
+    expect(parsed.tweet).toBe("Great article https://martinfowler.com/articles/platform-prerequisites.html");
+
+    consoleSpy.mockRestore();
+    stderrSpy.mockRestore();
   });
 });
 

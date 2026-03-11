@@ -12,6 +12,7 @@ import { ensureFolder, findExistingNote, readExistingMeta, writeNote, updateInde
 import { extractContent } from './extract.js';
 import { summariseContent } from './summarise.js';
 import { generateNote } from './note.js';
+import { composeTweet, openTweetIntent } from './tweet.js';
 
 // Existing glean() function — unchanged.
 export async function glean(url, options = {}) {
@@ -87,14 +88,26 @@ export async function glean(url, options = {}) {
     category: options.category || null,
   });
 
-  // 7. Handle output modes
+  // 7. Build tweet text (used by multiple output modes)
+  const tweetText = options.tweet
+    ? composeTweet(summaryData.tweetSummary, url, summaryData.title)
+    : null;
+
+  // 8. Handle output modes
   if (options.dryRun) {
     console.log(note.content);
-    return { dryRun: true, content: note.content };
+    if (tweetText) {
+      console.error(`Tweet: ${tweetText}`);
+    }
+    return { dryRun: true, content: note.content, tweet: tweetText };
   }
 
   if (options.json) {
-    console.log(JSON.stringify({ frontmatter: note.frontmatter, filename: note.filename }, null, 2));
+    const output = { frontmatter: note.frontmatter, filename: note.filename };
+    if (tweetText) {
+      output.tweet = tweetText;
+    }
+    console.log(JSON.stringify(output, null, 2));
     return;
   }
 
@@ -110,12 +123,18 @@ export async function glean(url, options = {}) {
   await updateIndex(vaultPath, folder, url, finalFilename, note.frontmatter.gleaned, note.frontmatter.updated);
   await deployBase(vaultPath, folder);
 
-  // 9. Open in Obsidian (if --open)
+  // 10. Open in Obsidian (if --open)
   if (options.open) {
     execSync(`open "obsidian://open?vault=${encodeURIComponent(config.vault)}&file=${encodeURIComponent(finalFilename)}"`);
   }
 
-  // 10. Return result
+  // 11. Open tweet intent (if --tweet)
+  if (tweetText) {
+    console.error(`Tweet: ${tweetText}`);
+    openTweetIntent(tweetText);
+  }
+
+  // 12. Return result
   return { path: filePath, filename: finalFilename, isUpdate, title: note.frontmatter.title };
 }
 
