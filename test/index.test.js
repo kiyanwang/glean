@@ -122,7 +122,7 @@ function setupHappyPath() {
     vaultPath: "/vault",
     folder: "Glean",
     defaultTags: ["glean"],
-    model: "sonnet",
+    model: "haiku",
   });
 
   validateUrl.mockReturnValue(true);
@@ -154,7 +154,7 @@ describe("glean orchestration (index.js)", () => {
 
     // Verify each step was called in order.
     expect(extractContent).toHaveBeenCalledWith(TEST_URL);
-    expect(summariseContent).toHaveBeenCalledWith(buildExtractedData());
+    expect(summariseContent).toHaveBeenCalledWith(buildExtractedData(), "haiku");
     expect(generateNote).toHaveBeenCalledWith(
       claudeResponse,
       buildExtractedData(),

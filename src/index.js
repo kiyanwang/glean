@@ -66,7 +66,7 @@ export async function glean(url, options = {}) {
 
   // 5. Summarise content
   console.error('Generating summary...');
-  const summaryData = await summariseContent(extractedData);
+  const summaryData = await summariseContent(extractedData, config.model);
 
   // 6. Generate note
   let parsedTags = options.tags || [];

@@ -64,7 +64,7 @@ describe("config", () => {
     expect(config.vault).toBe("My Vault");
     expect(config.folder).toBe("Glean");
     expect(config.defaultTags).toEqual(["glean"]);
-    expect(config.model).toBe("sonnet");
+    expect(config.model).toBe("haiku");
     expect(config.vaultPath).toBeNull();
     expect(config.categories).toEqual(expect.arrayContaining(["ai", "other"]));
   });
@@ -78,7 +78,7 @@ describe("config", () => {
     expect(config.vault).toBe("Knowledge Base");
     expect(config.folder).toBe("Glean");
     expect(config.defaultTags).toEqual(["glean"]);
-    expect(config.model).toBe("sonnet");
+    expect(config.model).toBe("haiku");
     expect(config.vaultPath).toBeNull();
   });
 
@@ -112,6 +112,6 @@ describe("config", () => {
     // Other defaults should be preserved.
     expect(config.vault).toBe("Knowledge Base");
     expect(config.defaultTags).toEqual(["glean"]);
-    expect(config.model).toBe("sonnet");
+    expect(config.model).toBe("haiku");
   });
 });

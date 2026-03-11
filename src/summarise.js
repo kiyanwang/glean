@@ -1,8 +1,14 @@
-import { execSync } from "child_process";
-import { writeFileSync, unlinkSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import { spawnSync } from "child_process";
 import { truncateContent } from "./utils.js";
+
+/**
+ * Map of valid model shorthand names accepted by the Claude CLI.
+ */
+export const MODEL_MAP = {
+  haiku: "haiku",
+  sonnet: "sonnet",
+  opus: "opus",
+};
 
 /**
  * JSON schema describing the structured summary Claude must return.
@@ -113,87 +119,88 @@ Generate a structured summary with the following fields:
  * Summarise extracted article content using the Claude CLI.
  *
  * @param {object} extractedData - The object returned by extractContent.
+ * @param {string} [model='haiku'] - Model shorthand or full name for the Claude CLI.
  * @returns {object} Parsed structured summary.
  */
-export function summariseContent(extractedData) {
+export function summariseContent(extractedData, model = "haiku") {
   const prompt = buildPrompt(extractedData);
+  const resolvedModel = MODEL_MAP[model] || model;
 
-  // Write the prompt to a temporary file so we can pipe it to the CLI.
-  const tmpFile = join(
-    tmpdir(),
-    `glean-prompt-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`,
-  );
+  const env = { ...process.env };
+  delete env.CLAUDECODE;
+  delete env.CLAUDE_CODE_ENTRYPOINT;
 
-  try {
-    writeFileSync(tmpFile, prompt, "utf-8");
+  const args = [
+    "-p",
+    "--model",
+    resolvedModel,
+    "--output-format",
+    "json",
+    "--json-schema",
+    summarySchema,
+  ];
 
-    const command = `claude -p --model sonnet --output-format json --json-schema '${summarySchema}' < "${tmpFile}"`;
+  const result = spawnSync("claude", args, {
+    input: prompt,
+    encoding: "utf-8",
+    timeout: 120000,
+    maxBuffer: 10 * 1024 * 1024,
+    env,
+  });
 
-    let output;
-    try {
-      const env = { ...process.env };
-      delete env.CLAUDECODE;
-      delete env.CLAUDE_CODE_ENTRYPOINT;
-      output = execSync(command, {
-        encoding: "utf-8",
-        timeout: 120000,
-        maxBuffer: 10 * 1024 * 1024,
-        env,
-        shell: true,
-      });
-    } catch (err) {
-      if (err.code === "ENOENT" || (err.message && err.message.includes("ENOENT"))) {
-        throw new Error(
-          "Claude CLI not found. Install it from https://claude.ai/download",
-          { cause: err },
-        );
-      }
-      if (err.killed || (err.signal && err.signal === "SIGTERM")) {
-        throw new Error("Claude CLI timed out", { cause: err });
-      }
+  if (result.error) {
+    if (result.error.code === "ENOENT") {
       throw new Error(
-        `Claude CLI failed: ${err.stderr || err.message || String(err)}`,
-        { cause: err },
+        "Claude CLI not found. Install it from https://claude.ai/download",
+        { cause: result.error },
       );
     }
-
-    let parsed;
-    try {
-      parsed = JSON.parse(output);
-    } catch (err) {
-      throw new Error(
-        `Failed to parse Claude CLI response as JSON: ${err.message}`,
-        { cause: err },
-      );
-    }
-
-    // Claude CLI --output-format json returns an envelope with the summary in
-    // `structured_output` (when --json-schema is used) or `result` (as a JSON string).
-    if (parsed.structured_output && typeof parsed.structured_output === "object") {
-      parsed = parsed.structured_output;
-    } else if (parsed.result !== undefined && typeof parsed.result === "string" && parsed.result.trim()) {
-      try {
-        parsed = JSON.parse(parsed.result);
-      } catch {
-        // fall through to validation which will report missing fields
-      }
-    }
-
-    const missing = REQUIRED_FIELDS.filter(
-      (field) => !(field in parsed),
+    throw new Error(
+      `Claude CLI failed: ${result.error.message || String(result.error)}`,
+      { cause: result.error },
     );
-    if (missing.length > 0) {
-      throw new Error(
-        `Summary is missing required fields: ${missing.join(", ")}`,
-      );
-    }
+  }
 
-    return parsed;
-  } finally {
+  if (result.signal === "SIGTERM") {
+    throw new Error("Claude CLI timed out");
+  }
+
+  if (result.status !== 0) {
+    throw new Error(
+      `Claude CLI failed: ${result.stderr || `exit code ${result.status}`}`,
+    );
+  }
+
+  let parsed;
+  try {
+    parsed = JSON.parse(result.stdout);
+  } catch (err) {
+    throw new Error(
+      `Failed to parse Claude CLI response as JSON: ${err.message}`,
+      { cause: err },
+    );
+  }
+
+  // Claude CLI --output-format json returns an envelope with the summary in
+  // `structured_output` (when --json-schema is used) or `result` (as a JSON string).
+  if (parsed.structured_output && typeof parsed.structured_output === "object") {
+    parsed = parsed.structured_output;
+  } else if (parsed.result !== undefined && typeof parsed.result === "string" && parsed.result.trim()) {
     try {
-      unlinkSync(tmpFile);
+      parsed = JSON.parse(parsed.result);
     } catch {
-      // Ignore cleanup errors.
+      // fall through to validation which will report missing fields
     }
   }
+
+  const missing = REQUIRED_FIELDS.filter(
+    (field) => !(field in parsed),
+  );
+  if (missing.length > 0) {
+    throw new Error(
+      `Summary is missing required fields: ${missing.join(", ")}`,
+    );
+  }
+
+  return parsed;
 }

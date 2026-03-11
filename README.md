@@ -55,7 +55,7 @@ Example configuration:
   "vaultPath": "/Users/you/Documents/Knowledge Base",
   "folder": "Glean",
   "defaultTags": ["glean"],
-  "model": "sonnet",
+  "model": "haiku",
   "categories": [
     "engineering-management",
     "tools-and-libraries",
@@ -76,7 +76,7 @@ Example configuration:
 | `vaultPath` | Yes | Absolute path to the vault folder on disk. Required for writing notes. |
 | `folder` | No | Subfolder within the vault where notes are stored. Defaults to `Glean`. |
 | `defaultTags` | No | Tags applied to every note. Defaults to `["glean"]`. |
-| `model` | No | Claude model to use for summarisation. Defaults to `sonnet`. |
+| `model` | No | Claude model to use for summarisation (`haiku`, `sonnet`, `opus`). Defaults to `haiku`. |
 | `categories` | No | Allowed category values for classification. Defaults to the list shown above. |
 
 ## Usage
@@ -99,6 +99,7 @@ Options:
   --update              Re-glean a previously saved URL (default: false)
   --dry-run             Print the generated note without saving (default: false)
   --json                Output structured data as JSON (default: false)
+  --model <model>       AI model for summarisation (haiku, sonnet, opus)
   --config <path>       Path to config file
   -h, --help            display help for command
 ```
@@ -131,6 +132,12 @@ Dry run to preview the generated note without writing anything to disk:
 
 ```bash
 glean https://example.com/article --dry-run
+```
+
+Use a different model for higher-quality summaries (slower):
+
+```bash
+glean https://example.com/article --model sonnet
 ```
 
 Output the structured data as JSON:

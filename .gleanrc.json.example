@@ -3,7 +3,7 @@
   "vaultPath": "/Users/you/Documents/Knowledge Base",
   "folder": "Glean",
   "defaultTags": ["glean"],
-  "model": "sonnet",
+  "model": "haiku",
   "categories": [
     "engineering-management",
     "tools-and-libraries",
