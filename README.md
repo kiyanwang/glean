@@ -20,6 +20,8 @@ URL -> defuddle (parse & extract) -> Claude (summarise) -> Obsidian (store & ind
 - **Update / re-glean** -- refresh an existing note with `--update` while preserving the original capture date and any manually added tags
 - **Dry-run mode** -- preview the generated note without writing to disk
 - **JSON output** -- emit structured data as JSON for integration with other tools
+- **Async by default** -- summarisation runs in a detached background worker, returning control to your terminal in 1-3 seconds with a macOS notification when the note is ready
+- **Job queue** -- durable SQLite-backed queue survives crashes, laptop sleep, and retries failed jobs automatically
 - **Configurable** -- defaults for vault, folder, tags, model, and categories via `~/.gleanrc.json`
 
 ## Prerequisites
@@ -77,12 +79,13 @@ Example configuration:
 | `folder` | No | Subfolder within the vault where notes are stored. Defaults to `Glean`. |
 | `defaultTags` | No | Tags applied to every note. Defaults to `["glean"]`. |
 | `model` | No | Claude model to use for summarisation (`haiku`, `sonnet`, `opus`). Defaults to `haiku`. |
+| `dbPath` | No | Path to the SQLite queue database. Defaults to `~/.glean/glean.db`. |
 | `categories` | No | Allowed category values for classification. Defaults to the list shown above. |
 
 ## Usage
 
 ```
-Usage: glean [options] <url>
+Usage: glean [options] [command] <url>
 
 Capture web articles as rich Obsidian notes with AI summaries
 
@@ -92,6 +95,7 @@ Arguments:
 Options:
   -V, --version         output the version number
   --vault <name>        Target Obsidian vault
+  --vault-path <path>   Absolute path to vault directory
   --folder <path>       Folder within vault for notes
   --category <cat>      Override auto-detected category
   --tags <tags>         Additional tags (comma-separated)
@@ -101,12 +105,30 @@ Options:
   --json                Output structured data as JSON (default: false)
   --model <model>       AI model for summarisation (haiku, sonnet, opus)
   --config <path>       Path to config file
+  --sync                Run synchronously (wait for summarisation) (default: false)
   -h, --help            display help for command
+
+Commands:
+  status [job-id]       Show the queue status
+  retry [job-id]        Retry failed job(s)
+  clear                 Clear completed and failed jobs from the queue
 ```
+
+### Async vs Sync Mode
+
+By default, `glean <url>` extracts content in the foreground (1-3 seconds) and then enqueues the summarisation to a background worker. A macOS notification is sent when the note is ready.
+
+Use `--sync` to wait for summarisation inline (the original behaviour):
+
+```bash
+glean https://example.com/article --sync
+```
+
+`--dry-run` and `--json` modes always run synchronously since they need immediate output.
 
 ### Examples
 
-Basic usage:
+Basic usage (async -- returns immediately):
 
 ```bash
 glean https://martinfowler.com/articles/platform-prerequisites.html
@@ -144,6 +166,31 @@ Output the structured data as JSON:
 
 ```bash
 glean https://example.com/article --json
+```
+
+### Queue Management
+
+Check the status of queued jobs:
+
+```bash
+glean status              # summary view
+glean status <job-id>     # detail for a specific job
+glean status --all        # full history
+```
+
+Retry failed jobs:
+
+```bash
+glean retry               # retry all failed jobs
+glean retry <job-id>      # retry a specific job
+```
+
+Clear job history:
+
+```bash
+glean clear               # clear completed and failed jobs
+glean clear --failed      # clear only failed jobs
+glean clear --all         # clear ALL jobs (requires confirmation)
 ```
 
 ## Note Structure
@@ -224,29 +271,42 @@ npm run test:coverage # run with coverage report
 ```
 glean/
 ├── bin/
-│   └── glean.js               # CLI entry point
+│   └── glean.js               # CLI entry point (--sync, status/retry/clear subcommands)
 ├── src/
-│   ├── index.js               # Main orchestrator
+│   ├── index.js               # Main orchestrator (glean, gleanAsync, spawnWorker)
 │   ├── extract.js             # defuddle integration (content extraction)
 │   ├── summarise.js           # Claude CLI integration (AI summarisation)
 │   ├── note.js                # Markdown/YAML note generation
 │   ├── store.js               # File writing, index management, update detection
 │   ├── config.js              # Configuration loading
-│   └── utils.js               # Filename sanitisation, URL validation
+│   ├── utils.js               # Filename sanitisation, URL validation
+│   ├── db.js                  # SQLite connection singleton (WAL mode, schema)
+│   ├── queue.js               # Job queue operations (enqueue, claim, retry, clear)
+│   ├── worker.js              # Background worker process (processes queue, sends notifications)
+│   └── commands/
+│       ├── status.js           # glean status
+│       ├── retry.js            # glean retry
+│       └── clear.js            # glean clear
 ├── test/
-│   ├── extract.test.js
-│   ├── summarise.test.js
-│   ├── note.test.js
-│   ├── store.test.js
-│   ├── update.test.js
-│   ├── config.test.js
-│   ├── utils.test.js
-│   ├── index.test.js
+│   ├── *.test.js              # Unit tests for each source module
+│   ├── commands/
+│   │   ├── status.test.js
+│   │   ├── retry.test.js
+│   │   └── clear.test.js
 │   └── fixtures/              # Sample data for tests
 ├── .gleanrc.json.example      # Example configuration
 ├── package.json
 └── vitest.config.js
 ```
+
+### `~/.glean/` Directory
+
+Created automatically at runtime. Contains:
+
+| File | Purpose |
+|------|---------|
+| `glean.db` | SQLite database storing the job queue |
+| `worker.pid` | PID file for the background worker (ephemeral) |
 
 ## License
 

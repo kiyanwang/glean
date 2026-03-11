@@ -93,6 +93,21 @@ vi.mock("../src/note.js", () => ({
 
 vi.mock("child_process", () => ({
   execSync: vi.fn(),
+  spawn: vi.fn(() => ({ unref: vi.fn() })),
+}));
+
+vi.mock("fs", async (importOriginal) => {
+  const actual = await importOriginal();
+  return {
+    ...actual,
+    existsSync: vi.fn((...args) => actual.existsSync(...args)),
+    readFileSync: vi.fn((...args) => actual.readFileSync(...args)),
+  };
+});
+
+vi.mock("../src/queue.js", () => ({
+  findPendingJobByUrl: vi.fn(),
+  enqueueJob: vi.fn(),
 }));
 
 // Import mocked modules.
@@ -110,8 +125,12 @@ const { extractContent } = await import("../src/extract.js");
 const { summariseContent } = await import("../src/summarise.js");
 const { generateNote } = await import("../src/note.js");
 
-// Import the function under test.
-const { glean } = await import("../src/index.js");
+const { spawn } = await import("child_process");
+const { existsSync, readFileSync: mockedReadFileSync } = await import("fs");
+const { findPendingJobByUrl, enqueueJob } = await import("../src/queue.js");
+
+// Import the functions under test.
+const { glean, gleanAsync, spawnWorker } = await import("../src/index.js");
 
 // --- Helpers -----------------------------------------------------------------
 
@@ -312,5 +331,119 @@ describe("glean orchestration (index.js)", () => {
     // writeNote should NOT have been called since summarisation failed.
     expect(writeNote).not.toHaveBeenCalled();
     expect(updateIndex).not.toHaveBeenCalled();
+  });
+});
+
+// --- Async path tests --------------------------------------------------------
+
+describe("gleanAsync", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+    setupHappyPath();
+
+    // Default queue mocks.
+    findPendingJobByUrl.mockReturnValue(null);
+    enqueueJob.mockReturnValue({
+      id: "test-job-id-1234",
+      url: TEST_URL,
+      status: "pending",
+      created_at: "2026-03-11 14:00:00",
+    });
+
+    // spawnWorker needs existsSync to return false (no PID file).
+    existsSync.mockReturnValue(false);
+  });
+
+  it("extracts content and enqueues a job", async () => {
+    await gleanAsync(TEST_URL, { vaultPath: "/vault", folder: "Glean" });
+
+    expect(extractContent).toHaveBeenCalledWith(TEST_URL);
+    expect(enqueueJob).toHaveBeenCalledWith(
+      TEST_URL,
+      buildExtractedData(),
+      expect.objectContaining({ vaultPath: "/vault", folder: "Glean" }),
+      expect.any(Object),
+      expect.objectContaining({ isUpdate: false }),
+    );
+  });
+
+  it("detects duplicate pending job", async () => {
+    findPendingJobByUrl.mockReturnValue({
+      id: "existing-job-id",
+      url: TEST_URL,
+      status: "pending",
+    });
+
+    const stderrSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+
+    await gleanAsync(TEST_URL, { vaultPath: "/vault", folder: "Glean" });
+
+    // Should NOT enqueue a new job.
+    expect(enqueueJob).not.toHaveBeenCalled();
+    expect(stderrSpy.mock.calls.some((c) => c[0].includes("already queued"))).toBe(true);
+
+    stderrSpy.mockRestore();
+  });
+
+  it("rejects without vault path", async () => {
+    loadConfig.mockResolvedValue({
+      vault: "Knowledge Base",
+      vaultPath: null,
+      folder: "Glean",
+      defaultTags: ["glean"],
+      model: "haiku",
+    });
+
+    await expect(
+      gleanAsync(TEST_URL, {}),
+    ).rejects.toThrow("No vault path configured");
+  });
+
+  it("rejects invalid URL", async () => {
+    validateUrl.mockReturnValue(false);
+
+    await expect(
+      gleanAsync("not-a-url", { vaultPath: "/vault" }),
+    ).rejects.toThrow("Invalid URL");
+  });
+});
+
+describe("spawnWorker", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.restoreAllMocks();
+    existsSync.mockReturnValue(false);
+  });
+
+  it("spawns when no worker running (no PID file)", () => {
+    existsSync.mockReturnValue(false);
+
+    spawnWorker();
+
+    expect(spawn).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.arrayContaining([expect.stringContaining("worker.js")]),
+      expect.objectContaining({ detached: true, stdio: "ignore" }),
+    );
+  });
+
+  it("skips spawn when worker already running", () => {
+    existsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue(String(process.pid)); // Current process is alive.
+    // process.kill(pid, 0) will succeed for our own PID.
+
+    spawnWorker();
+
+    expect(spawn).not.toHaveBeenCalled();
+  });
+
+  it("spawns when PID file is stale (process not running)", () => {
+    existsSync.mockReturnValue(true);
+    mockedReadFileSync.mockReturnValue("999999999"); // Non-existent PID.
+
+    spawnWorker();
+
+    expect(spawn).toHaveBeenCalled();
   });
 });
