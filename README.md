@@ -8,8 +8,134 @@ Capture web articles as rich Obsidian notes with AI-generated summaries.
 
 Glean is a Node.js CLI tool that transforms a URL into a fully catalogued knowledge entry in a single command. It extracts web article content, generates structured AI summaries via Claude, and stores the result as a rich Obsidian note with YAML frontmatter and a searchable Base view.
 
+### Core Pipeline
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '14px', 'fontFamily': 'system-ui, -apple-system, sans-serif' }}}%%
+flowchart LR
+    A([URL]) --> B[Extract\ncontent]
+    B --> C[Summarise\nvia Claude]
+    C --> D[Generate\nnote]
+    D --> E[Write to\nvault]
+    E --> F[Update index\n& Base views]
+
+    classDef input fill:#dbeafe,stroke:#2563eb,color:#1e3a5f,stroke-width:2px
+    classDef process fill:#f0f0ff,stroke:#6366f1,color:#312e81,stroke-width:1.5px
+    classDef ai fill:#ede9fe,stroke:#7c3aed,color:#4c1d95,stroke-width:2px
+    classDef output fill:#d1fae5,stroke:#059669,color:#064e3b,stroke-width:2px
+
+    class A input
+    class B,D process
+    class C ai
+    class E,F output
+
+    linkStyle default stroke:#94a3b8,stroke-width:2px
 ```
-URL -> defuddle (parse & extract) -> Claude (summarise) -> Obsidian (store & index)
+
+### Async vs Sync Execution
+
+By default, Glean runs in **async mode** — content extraction happens in the foreground (1-3 seconds), then summarisation is handed off to a background worker. Use `--sync` to wait for the full pipeline inline.
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '14px', 'fontFamily': 'system-ui, -apple-system, sans-serif' }}}%%
+flowchart TD
+    Start([glean URL]) --> Extract[Extract content]
+
+    Extract --> Mode{--sync?}
+
+    Mode -- Yes --> SyncSum[Summarise\nvia Claude]
+    SyncSum --> SyncNote[Generate &\nwrite note]
+    SyncNote --> Done([Done])
+
+    Mode -- "No · default" --> Enqueue[Enqueue job]
+    Enqueue --> Spawn[Spawn background\nworker]
+    Spawn --> Return([Terminal returned])
+
+    Spawn -.->|detached process| Worker[Worker\nclaims job]
+    Worker --> WSum[Summarise\nvia Claude]
+    WSum --> WNote[Generate &\nwrite note]
+    WNote --> Notify([macOS notification])
+
+    classDef input fill:#dbeafe,stroke:#2563eb,color:#1e3a5f,stroke-width:2px
+    classDef process fill:#f0f0ff,stroke:#6366f1,color:#312e81,stroke-width:1.5px
+    classDef ai fill:#ede9fe,stroke:#7c3aed,color:#4c1d95,stroke-width:2px
+    classDef decision fill:#fef3c7,stroke:#d97706,color:#78350f,stroke-width:2px
+    classDef queue fill:#fce7f3,stroke:#db2777,color:#831843,stroke-width:1.5px
+    classDef success fill:#d1fae5,stroke:#059669,color:#064e3b,stroke-width:2px
+    classDef bg fill:#f5f3ff,stroke:#8b5cf6,color:#4c1d95,stroke-width:1.5px,stroke-dasharray:4
+
+    class Start input
+    class Extract process
+    class Mode decision
+    class SyncSum,WSum ai
+    class SyncNote,WNote process
+    class Enqueue queue
+    class Spawn,Worker bg
+    class Done,Return,Notify success
+
+    linkStyle default stroke:#94a3b8,stroke-width:1.5px
+    linkStyle 7 stroke:#8b5cf6,stroke-width:1.5px,stroke-dasharray:6
+```
+
+### Queue & Worker Architecture
+
+The durable SQLite-backed queue survives crashes, laptop sleep, and retries failed jobs automatically.
+
+```mermaid
+%%{init: {'theme': 'base', 'themeVariables': { 'fontSize': '14px', 'fontFamily': 'system-ui, -apple-system, sans-serif' }}}%%
+flowchart LR
+    subgraph CLI ["&nbsp;CLI Process&nbsp;"]
+        direction LR
+        G([glean URL]) --> EX[Extract]
+        EX --> EQ[Enqueue]
+    end
+
+    EQ --> Q
+
+    subgraph DB ["&nbsp;SQLite Queue&nbsp;"]
+        Q[("Jobs")]
+    end
+
+    Q --> CL
+
+    subgraph BG ["&nbsp;Background Worker&nbsp;"]
+        direction LR
+        CL[Claim] --> PR[Process]
+        PR --> OK{OK?}
+        OK -- Yes --> CO[Complete]
+        OK -- No --> FL[Fail]
+    end
+
+    CO --> Notify([Notify])
+    FL -.->|retry| Q
+
+    subgraph Mgmt ["&nbsp;Queue Management&nbsp;"]
+        ST["status"]
+        RT["retry"]
+        CLR["clear"]
+    end
+
+    Mgmt -.-> Q
+
+    classDef input fill:#dbeafe,stroke:#2563eb,color:#1e3a5f,stroke-width:2px
+    classDef process fill:#f0f0ff,stroke:#6366f1,color:#312e81,stroke-width:1.5px
+    classDef db fill:#fef3c7,stroke:#d97706,color:#78350f,stroke-width:2px
+    classDef decision fill:#fef3c7,stroke:#d97706,color:#78350f,stroke-width:2px
+    classDef success fill:#d1fae5,stroke:#059669,color:#064e3b,stroke-width:2px
+    classDef fail fill:#fee2e2,stroke:#dc2626,color:#7f1d1d,stroke-width:1.5px
+    classDef mgmt fill:#f1f5f9,stroke:#64748b,color:#334155,stroke-width:1.5px
+
+    class G input
+    class EX,EQ,CL,PR process
+    class Q db
+    class OK decision
+    class CO,Notify success
+    class FL fail
+    class ST,RT,CLR mgmt
+
+    linkStyle default stroke:#94a3b8,stroke-width:1.5px
+    linkStyle 7 stroke:#dc2626,stroke-width:1.5px,stroke-dasharray:6
+    linkStyle 8 stroke:#64748b,stroke-width:1px,stroke-dasharray:4
 ```
 
 ## Features
