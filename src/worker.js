@@ -13,6 +13,7 @@ import { summariseContent } from "./summarise.js";
 import { generateNote } from "./note.js";
 import { resolveUniqueFilename } from "./utils.js";
 import { writeNote, updateIndex, deployBase, ensureFolder } from "./store.js";
+import { composeTweet, openTweetIntent } from "./tweet.js";
 
 const PID_FILE = path.join(os.homedir(), ".glean", "worker.pid");
 
@@ -114,6 +115,12 @@ async function processJob(job) {
     } catch {
       // Non-fatal.
     }
+  }
+
+  // Step 6: Open tweet intent if requested.
+  if (cliOptions.tweet) {
+    const tweetText = composeTweet(summaryData.tweetSummary, job.url, summaryData.title);
+    openTweetIntent(tweetText);
   }
 
   return { path: filePath, filename: finalFilename };

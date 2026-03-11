@@ -20,5 +20,6 @@
   ],
   "category": "engineering-management",
   "readingTimeMinutes": 12,
-  "sentiment": "informative"
+  "sentiment": "informative",
+  "tweetSummary": "Platform teams must invest in docs, golden paths, and dev satisfaction before offering self-service — simply building a platform isn't enough."
 }

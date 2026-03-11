@@ -27,6 +27,11 @@ vi.mock("../src/utils.js", async (importOriginal) => {
   };
 });
 
+vi.mock("../src/tweet.js", () => ({
+  composeTweet: vi.fn(),
+  openTweetIntent: vi.fn(),
+}));
+
 vi.mock("child_process", () => ({
   execSync: vi.fn(),
   spawnSync: vi.fn(),
@@ -47,6 +52,7 @@ const { generateNote } = await import("../src/note.js");
 const { writeNote, updateIndex, deployBase, ensureFolder } = await import("../src/store.js");
 const { resolveUniqueFilename } = await import("../src/utils.js");
 const { existsSync } = await import("fs");
+const { composeTweet, openTweetIntent } = await import("../src/tweet.js");
 
 // Import processJob for direct testing.
 const { processJob } = await import("../src/worker.js");
@@ -200,5 +206,31 @@ describe("processJob", () => {
         category: "software-engineering",
       }),
     );
+  });
+
+  it("opens tweet intent when --tweet option is set", async () => {
+    composeTweet.mockReturnValue("Great article https://example.com/article");
+
+    enqueueJob(TEST_URL, buildExtractedData(), buildConfig(), { tweet: true });
+    const claimed = claimNextJob();
+
+    await processJob(claimed);
+
+    expect(composeTweet).toHaveBeenCalledWith(
+      undefined, // tweetSummary not in mock summaryData
+      TEST_URL,
+      "Test Article",
+    );
+    expect(openTweetIntent).toHaveBeenCalledWith("Great article https://example.com/article");
+  });
+
+  it("does not open tweet intent when --tweet not set", async () => {
+    enqueueJob(TEST_URL, buildExtractedData(), buildConfig(), {});
+    const claimed = claimNextJob();
+
+    await processJob(claimed);
+
+    expect(composeTweet).not.toHaveBeenCalled();
+    expect(openTweetIntent).not.toHaveBeenCalled();
   });
 });
