@@ -122,7 +122,7 @@ function setupHappyPath() {
     vaultPath: "/vault",
     folder: "Glean",
     defaultTags: ["glean"],
-    model: "sonnet",
+    model: "haiku",
   });
 
   validateUrl.mockReturnValue(true);
@@ -130,7 +130,7 @@ function setupHappyPath() {
   findExistingNote.mockResolvedValue(null);
 
   extractContent.mockResolvedValue(buildExtractedData());
-  summariseContent.mockReturnValue(claudeResponse);
+  summariseContent.mockResolvedValue(claudeResponse);
   generateNote.mockReturnValue(buildNoteResult());
 
   resolveUniqueFilename.mockResolvedValue("platform-prerequisites-for-self-service");
@@ -154,7 +154,7 @@ describe("glean orchestration (index.js)", () => {
 
     // Verify each step was called in order.
     expect(extractContent).toHaveBeenCalledWith(TEST_URL);
-    expect(summariseContent).toHaveBeenCalledWith(buildExtractedData());
+    expect(summariseContent).toHaveBeenCalledWith(buildExtractedData(), "haiku");
     expect(generateNote).toHaveBeenCalledWith(
       claudeResponse,
       buildExtractedData(),
@@ -301,9 +301,7 @@ describe("glean orchestration (index.js)", () => {
     setupHappyPath();
 
     // Override: summarisation throws.
-    summariseContent.mockImplementation(() => {
-      throw new Error("Claude CLI failed");
-    });
+    summariseContent.mockRejectedValue(new Error("Claude CLI failed"));
 
     await expect(
       glean(TEST_URL, { vaultPath: "/vault", folder: "Glean" }),

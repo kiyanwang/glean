@@ -18,6 +18,7 @@ program
   .option('--update', 'Re-glean a previously saved URL', false)
   .option('--dry-run', 'Print the generated note without saving', false)
   .option('--json', 'Output structured data as JSON', false)
+  .option('--model <model>', 'AI model to use for summarisation (haiku, sonnet, opus)')
   .option('--config <path>', 'Path to config file')
   .action(async (url, options) => {
     try {

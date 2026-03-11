@@ -1,81 +1,52 @@
-import { execSync } from "child_process";
-import { writeFileSync, unlinkSync } from "fs";
-import { tmpdir } from "os";
-import { join } from "path";
+import Anthropic from "@anthropic-ai/sdk";
+import { z } from "zod";
+import { zodOutputFormat } from "@anthropic-ai/sdk/helpers/zod";
 import { truncateContent } from "./utils.js";
 
 /**
- * JSON schema describing the structured summary Claude must return.
+ * Map of shorthand model names to full Anthropic model IDs.
  */
-const summarySchema = JSON.stringify({
-  type: "object",
-  properties: {
-    title: { type: "string" },
-    author: { type: "string" },
-    source: { type: "string" },
-    published: { type: "string" },
-    summary: { type: "string" },
-    keyTakeaways: { type: "array", items: { type: "string" } },
-    topics: { type: "array", items: { type: "string" } },
-    category: {
-      type: "string",
-      enum: [
-        "engineering-management",
-        "tools-and-libraries",
-        "ai",
-        "software-engineering",
-        "leadership",
-        "devops",
-        "architecture",
-        "career",
-        "other",
-      ],
-    },
-    readingTimeMinutes: { type: "number" },
-    sentiment: {
-      type: "string",
-      enum: [
-        "informative",
-        "opinion",
-        "tutorial",
-        "case-study",
-        "research",
-        "news",
-      ],
-    },
-  },
-  required: [
-    "title",
-    "author",
-    "source",
-    "published",
-    "summary",
-    "keyTakeaways",
-    "topics",
-    "category",
-    "readingTimeMinutes",
-    "sentiment",
-  ],
+export const MODEL_MAP = {
+  haiku: "claude-haiku-4-5-20251001",
+  sonnet: "claude-sonnet-4-6",
+  opus: "claude-opus-4-6",
+};
+
+/**
+ * Zod schema describing the structured summary the API must return.
+ */
+export const ArticleSummarySchema = z.object({
+  title: z.string(),
+  author: z.string(),
+  source: z.string(),
+  published: z.string(),
+  summary: z.string(),
+  keyTakeaways: z.array(z.string()),
+  topics: z.array(z.string()),
+  category: z.enum([
+    "engineering-management",
+    "tools-and-libraries",
+    "ai",
+    "software-engineering",
+    "leadership",
+    "devops",
+    "architecture",
+    "career",
+    "other",
+  ]),
+  readingTimeMinutes: z.number(),
+  sentiment: z.enum([
+    "informative",
+    "opinion",
+    "tutorial",
+    "case-study",
+    "research",
+    "news",
+  ]),
 });
 
 /**
- * Required fields that must be present in the parsed summary.
- */
-const REQUIRED_FIELDS = [
-  "title",
-  "author",
-  "source",
-  "published",
-  "summary",
-  "keyTakeaways",
-  "topics",
-  "category",
-  "readingTimeMinutes",
-  "sentiment",
-];
-
-/**
- * Build the prompt string sent to Claude for summarisation.
+ * Build the prompt string sent to the Anthropic API for summarisation.
  *
  * @param {object} data - Extracted article data from extractContent.
  * @returns {string}
@@ -110,90 +81,47 @@ Generate a structured summary with the following fields:
 }
 
 /**
- * Summarise extracted article content using the Claude CLI.
+ * Summarise extracted article content using the Anthropic API with structured outputs.
  *
  * @param {object} extractedData - The object returned by extractContent.
- * @returns {object} Parsed structured summary.
+ * @param {string} [model='haiku'] - Model shorthand or full model ID.
+ * @returns {Promise<object>} Parsed structured summary.
  */
-export function summariseContent(extractedData) {
+export async function summariseContent(extractedData, model = "haiku") {
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error(
+      "ANTHROPIC_API_KEY environment variable is required. Get your key at https://console.anthropic.com/",
+    );
+  }
+
+  const resolvedModel = MODEL_MAP[model] || model;
   const prompt = buildPrompt(extractedData);
 
-  // Write the prompt to a temporary file so we can pipe it to the CLI.
-  const tmpFile = join(
-    tmpdir(),
-    `glean-prompt-${Date.now()}-${Math.random().toString(36).slice(2)}.txt`,
-  );
+  const client = new Anthropic();
 
+  let response;
   try {
-    writeFileSync(tmpFile, prompt, "utf-8");
-
-    const command = `claude -p --model sonnet --output-format json --json-schema '${summarySchema}' < "${tmpFile}"`;
-
-    let output;
-    try {
-      const env = { ...process.env };
-      delete env.CLAUDECODE;
-      delete env.CLAUDE_CODE_ENTRYPOINT;
-      output = execSync(command, {
-        encoding: "utf-8",
-        timeout: 120000,
-        maxBuffer: 10 * 1024 * 1024,
-        env,
-        shell: true,
-      });
-    } catch (err) {
-      if (err.code === "ENOENT" || (err.message && err.message.includes("ENOENT"))) {
-        throw new Error(
-          "Claude CLI not found. Install it from https://claude.ai/download",
-          { cause: err },
-        );
-      }
-      if (err.killed || (err.signal && err.signal === "SIGTERM")) {
-        throw new Error("Claude CLI timed out", { cause: err });
-      }
-      throw new Error(
-        `Claude CLI failed: ${err.stderr || err.message || String(err)}`,
-        { cause: err },
-      );
-    }
-
-    let parsed;
-    try {
-      parsed = JSON.parse(output);
-    } catch (err) {
-      throw new Error(
-        `Failed to parse Claude CLI response as JSON: ${err.message}`,
-        { cause: err },
-      );
-    }
-
-    // Claude CLI --output-format json returns an envelope with the summary in
-    // `structured_output` (when --json-schema is used) or `result` (as a JSON string).
-    if (parsed.structured_output && typeof parsed.structured_output === "object") {
-      parsed = parsed.structured_output;
-    } else if (parsed.result !== undefined && typeof parsed.result === "string" && parsed.result.trim()) {
-      try {
-        parsed = JSON.parse(parsed.result);
-      } catch {
-        // fall through to validation which will report missing fields
-      }
-    }
-
-    const missing = REQUIRED_FIELDS.filter(
-      (field) => !(field in parsed),
-    );
-    if (missing.length > 0) {
-      throw new Error(
-        `Summary is missing required fields: ${missing.join(", ")}`,
-      );
-    }
-
-    return parsed;
-  } finally {
-    try {
-      unlinkSync(tmpFile);
-    } catch {
-      // Ignore cleanup errors.
-    }
+    response = await client.messages.parse({
+      model: resolvedModel,
+      max_tokens: 4096,
+      system:
+        "You are a knowledge curator. Generate a structured summary of the given article.",
+      messages: [{ role: "user", content: prompt }],
+      output_config: { format: zodOutputFormat(ArticleSummarySchema) },
+    });
+  } catch (err) {
+    throw new Error(`Anthropic API request failed: ${err.message}`, {
+      cause: err,
+    });
   }
+
+  const summary = response.parsed_output;
+
+  if (!summary) {
+    throw new Error(
+      "Anthropic API returned no parsed output. The response may have failed validation.",
+    );
+  }
+
+  return summary;
 }

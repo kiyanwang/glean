@@ -8,7 +8,7 @@ const DEFAULTS = {
   vaultPath: null,
   folder: "Glean",
   defaultTags: ["glean"],
-  model: "sonnet",
+  model: "haiku",
   categories: [
     "engineering-management",
     "tools-and-libraries",

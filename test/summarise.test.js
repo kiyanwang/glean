@@ -12,25 +12,19 @@ const claudeResponse = JSON.parse(
 
 // --- Mocks -------------------------------------------------------------------
 
-vi.mock("child_process", () => {
+const mockParse = vi.fn();
+
+vi.mock("@anthropic-ai/sdk", () => {
   return {
-    execSync: vi.fn(),
+    default: vi.fn(() => ({
+      messages: {
+        parse: mockParse,
+      },
+    })),
   };
 });
 
-// Mock fs write/unlink so no real temp files are written during tests.
-vi.mock("fs", async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    writeFileSync: vi.fn(),
-    unlinkSync: vi.fn(),
-  };
-});
-
-const { execSync } = await import("child_process");
-const { writeFileSync } = await import("fs");
-const { summariseContent } = await import("../src/summarise.js");
+const { summariseContent, MODEL_MAP } = await import("../src/summarise.js");
 
 // --- Helpers -----------------------------------------------------------------
 
@@ -54,34 +48,29 @@ const extractedData = {
 describe("summariseContent", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    process.env.ANTHROPIC_API_KEY = "test-key-123";
   });
 
-  it("builds correct prompt from extracted data", () => {
-    execSync.mockReturnValue(JSON.stringify(claudeResponse));
+  it("builds correct prompt from extracted data", async () => {
+    mockParse.mockResolvedValue({ parsed_output: claudeResponse });
 
-    summariseContent(extractedData);
+    await summariseContent(extractedData);
 
-    expect(execSync).toHaveBeenCalledTimes(1);
+    expect(mockParse).toHaveBeenCalledTimes(1);
 
-    // The command is the first argument to execSync.
-    const command = execSync.mock.calls[0][0];
-    expect(command).toContain("claude");
-    expect(command).toContain("--output-format json");
-    expect(command).toContain("--json-schema");
-
-    // The prompt is written to a temp file via writeFileSync.
-    // writeFileSync is called with (tmpFile, prompt, encoding).
-    expect(writeFileSync).toHaveBeenCalledTimes(1);
-    const prompt = writeFileSync.mock.calls[0][1];
-    expect(prompt).toContain(extractedData.title);
-    expect(prompt).toContain(extractedData.author);
-    expect(prompt).toContain(extractedData.url);
+    const callArgs = mockParse.mock.calls[0][0];
+    expect(callArgs.model).toBe("claude-haiku-4-5-20251001");
+    expect(callArgs.messages).toHaveLength(1);
+    expect(callArgs.messages[0].role).toBe("user");
+    expect(callArgs.messages[0].content).toContain(extractedData.title);
+    expect(callArgs.messages[0].content).toContain(extractedData.author);
+    expect(callArgs.messages[0].content).toContain(extractedData.url);
   });
 
-  it("parses valid Claude JSON response", () => {
-    execSync.mockReturnValue(JSON.stringify(claudeResponse));
+  it("parses valid response", async () => {
+    mockParse.mockResolvedValue({ parsed_output: claudeResponse });
 
-    const result = summariseContent(extractedData);
+    const result = await summariseContent(extractedData);
 
     expect(result.title).toBe(claudeResponse.title);
     expect(result.author).toBe(claudeResponse.author);
@@ -95,76 +84,65 @@ describe("summariseContent", () => {
     expect(result.sentiment).toBe(claudeResponse.sentiment);
   });
 
-  it("handles Claude CLI timeout", () => {
-    const err = new Error("Command timed out");
-    err.killed = true;
-    err.signal = "SIGTERM";
-    execSync.mockImplementation(() => {
-      throw err;
-    });
+  it("maps model shorthand to full ID", async () => {
+    mockParse.mockResolvedValue({ parsed_output: claudeResponse });
 
-    expect(() => summariseContent(extractedData)).toThrow("Claude CLI timed out");
+    await summariseContent(extractedData, "haiku");
+
+    const callArgs = mockParse.mock.calls[0][0];
+    expect(callArgs.model).toBe("claude-haiku-4-5-20251001");
   });
 
-  it("handles Claude CLI not found", () => {
-    const err = new Error("spawn claude ENOENT");
-    err.code = "ENOENT";
-    execSync.mockImplementation(() => {
-      throw err;
-    });
+  it("uses custom model string as-is", async () => {
+    mockParse.mockResolvedValue({ parsed_output: claudeResponse });
 
-    expect(() => summariseContent(extractedData)).toThrow("Claude CLI not found");
+    await summariseContent(extractedData, "claude-sonnet-4-6");
+
+    const callArgs = mockParse.mock.calls[0][0];
+    expect(callArgs.model).toBe("claude-sonnet-4-6");
   });
 
-  it("validates response has required fields", () => {
-    // Return JSON missing the 'summary' field.
-    const incomplete = { ...claudeResponse };
-    delete incomplete.summary;
-    execSync.mockReturnValue(JSON.stringify(incomplete));
+  it("handles API error", async () => {
+    mockParse.mockRejectedValue(new Error("Rate limit exceeded"));
 
-    expect(() => summariseContent(extractedData)).toThrow(
-      /missing required fields.*summary/i,
+    await expect(summariseContent(extractedData)).rejects.toThrow(
+      "Anthropic API request failed: Rate limit exceeded",
     );
   });
 
-  it("unwraps Claude CLI envelope with structured_output", () => {
-    const envelope = {
-      type: "result",
-      subtype: "success",
-      is_error: false,
-      result: "",
-      structured_output: claudeResponse,
-    };
-    execSync.mockReturnValue(JSON.stringify(envelope));
+  it("handles missing API key", async () => {
+    delete process.env.ANTHROPIC_API_KEY;
 
-    const result = summariseContent(extractedData);
-
-    expect(result.title).toBe(claudeResponse.title);
-    expect(result.category).toBe(claudeResponse.category);
+    await expect(summariseContent(extractedData)).rejects.toThrow(
+      "ANTHROPIC_API_KEY environment variable is required",
+    );
   });
 
-  it("unwraps Claude CLI envelope with result as JSON string", () => {
-    const envelope = {
-      type: "result",
-      result: JSON.stringify(claudeResponse),
-    };
-    execSync.mockReturnValue(JSON.stringify(envelope));
+  it("validates response has required fields", async () => {
+    // parsed_output is null/undefined when validation fails
+    mockParse.mockResolvedValue({ parsed_output: null });
 
-    const result = summariseContent(extractedData);
-
-    expect(result.title).toBe(claudeResponse.title);
+    await expect(summariseContent(extractedData)).rejects.toThrow(
+      /no parsed output/i,
+    );
   });
 
-  it("truncates very long content", () => {
-    execSync.mockReturnValue(JSON.stringify(claudeResponse));
+  it("truncates very long content", async () => {
+    mockParse.mockResolvedValue({ parsed_output: claudeResponse });
 
     const longData = {
       ...extractedData,
       content: "x".repeat(200000),
     };
 
-    // Should not throw — content gets truncated internally.
-    const result = summariseContent(longData);
+    // Should not throw -- content gets truncated internally.
+    const result = await summariseContent(longData);
     expect(result.title).toBe(claudeResponse.title);
+  });
+
+  it("exports MODEL_MAP with expected entries", () => {
+    expect(MODEL_MAP.haiku).toBe("claude-haiku-4-5-20251001");
+    expect(MODEL_MAP.sonnet).toBe("claude-sonnet-4-6");
+    expect(MODEL_MAP.opus).toBe("claude-opus-4-6");
   });
 });
