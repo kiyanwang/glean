@@ -145,13 +145,15 @@ export function summariseContent(extractedData) {
       if (err.code === "ENOENT" || (err.message && err.message.includes("ENOENT"))) {
         throw new Error(
           "Claude CLI not found. Install it from https://claude.ai/download",
+          { cause: err },
         );
       }
       if (err.killed || (err.signal && err.signal === "SIGTERM")) {
-        throw new Error("Claude CLI timed out");
+        throw new Error("Claude CLI timed out", { cause: err });
       }
       throw new Error(
         `Claude CLI failed: ${err.stderr || err.message || String(err)}`,
+        { cause: err },
       );
     }
 
@@ -161,6 +163,7 @@ export function summariseContent(extractedData) {
     } catch (err) {
       throw new Error(
         `Failed to parse Claude CLI response as JSON: ${err.message}`,
+        { cause: err },
       );
     }
 
