@@ -14,23 +14,12 @@ const claudeResponse = JSON.parse(
 
 vi.mock("child_process", () => {
   return {
-    execSync: vi.fn(),
+    spawnSync: vi.fn(),
   };
 });
 
-// Mock fs write/unlink so no real temp files are written during tests.
-vi.mock("fs", async (importOriginal) => {
-  const actual = await importOriginal();
-  return {
-    ...actual,
-    writeFileSync: vi.fn(),
-    unlinkSync: vi.fn(),
-  };
-});
-
-const { execSync } = await import("child_process");
-const { writeFileSync } = await import("fs");
-const { summariseContent } = await import("../src/summarise.js");
+const { spawnSync } = await import("child_process");
+const { summariseContent, MODEL_MAP } = await import("../src/summarise.js");
 
 // --- Helpers -----------------------------------------------------------------
 
@@ -49,6 +38,19 @@ const extractedData = {
   image: "",
 };
 
+function makeSuccessResult(data) {
+  return {
+    stdout: JSON.stringify({
+      type: "result",
+      structured_output: data,
+    }),
+    stderr: "",
+    status: 0,
+    signal: null,
+    error: null,
+  };
+}
+
 // --- Tests -------------------------------------------------------------------
 
 describe("summariseContent", () => {
@@ -56,30 +58,30 @@ describe("summariseContent", () => {
     vi.clearAllMocks();
   });
 
-  it("builds correct prompt from extracted data", () => {
-    execSync.mockReturnValue(JSON.stringify(claudeResponse));
+  it("builds correct prompt and passes it via stdin", () => {
+    spawnSync.mockReturnValue(makeSuccessResult(claudeResponse));
 
     summariseContent(extractedData);
 
-    expect(execSync).toHaveBeenCalledTimes(1);
+    expect(spawnSync).toHaveBeenCalledTimes(1);
 
-    // The command is the first argument to execSync.
-    const command = execSync.mock.calls[0][0];
-    expect(command).toContain("claude");
-    expect(command).toContain("--output-format json");
-    expect(command).toContain("--json-schema");
+    // The args array is the second argument to spawnSync.
+    const args = spawnSync.mock.calls[0][1];
+    expect(args).toContain("--output-format");
+    expect(args).toContain("json");
+    expect(args).toContain("--json-schema");
+    expect(args).toContain("--model");
+    expect(args).toContain("haiku");
 
-    // The prompt is written to a temp file via writeFileSync.
-    // writeFileSync is called with (tmpFile, prompt, encoding).
-    expect(writeFileSync).toHaveBeenCalledTimes(1);
-    const prompt = writeFileSync.mock.calls[0][1];
-    expect(prompt).toContain(extractedData.title);
-    expect(prompt).toContain(extractedData.author);
-    expect(prompt).toContain(extractedData.url);
+    // The prompt is passed as `input` in the options (3rd argument).
+    const options = spawnSync.mock.calls[0][2];
+    expect(options.input).toContain(extractedData.title);
+    expect(options.input).toContain(extractedData.author);
+    expect(options.input).toContain(extractedData.url);
   });
 
   it("parses valid Claude JSON response", () => {
-    execSync.mockReturnValue(JSON.stringify(claudeResponse));
+    spawnSync.mockReturnValue(makeSuccessResult(claudeResponse));
 
     const result = summariseContent(extractedData);
 
@@ -96,31 +98,34 @@ describe("summariseContent", () => {
   });
 
   it("handles Claude CLI timeout", () => {
-    const err = new Error("Command timed out");
-    err.killed = true;
-    err.signal = "SIGTERM";
-    execSync.mockImplementation(() => {
-      throw err;
+    spawnSync.mockReturnValue({
+      stdout: "",
+      stderr: "",
+      status: null,
+      signal: "SIGTERM",
+      error: null,
     });
 
     expect(() => summariseContent(extractedData)).toThrow("Claude CLI timed out");
   });
 
   it("handles Claude CLI not found", () => {
-    const err = new Error("spawn claude ENOENT");
-    err.code = "ENOENT";
-    execSync.mockImplementation(() => {
-      throw err;
+    spawnSync.mockReturnValue({
+      stdout: "",
+      stderr: "",
+      status: null,
+      signal: null,
+      error: { code: "ENOENT" },
     });
 
     expect(() => summariseContent(extractedData)).toThrow("Claude CLI not found");
   });
 
   it("validates response has required fields", () => {
-    // Return JSON missing the 'summary' field.
+    // Return envelope missing the 'summary' field.
     const incomplete = { ...claudeResponse };
     delete incomplete.summary;
-    execSync.mockReturnValue(JSON.stringify(incomplete));
+    spawnSync.mockReturnValue(makeSuccessResult(incomplete));
 
     expect(() => summariseContent(extractedData)).toThrow(
       /missing required fields.*summary/i,
@@ -135,7 +140,13 @@ describe("summariseContent", () => {
       result: "",
       structured_output: claudeResponse,
     };
-    execSync.mockReturnValue(JSON.stringify(envelope));
+    spawnSync.mockReturnValue({
+      stdout: JSON.stringify(envelope),
+      stderr: "",
+      status: 0,
+      signal: null,
+      error: null,
+    });
 
     const result = summariseContent(extractedData);
 
@@ -148,7 +159,13 @@ describe("summariseContent", () => {
       type: "result",
       result: JSON.stringify(claudeResponse),
     };
-    execSync.mockReturnValue(JSON.stringify(envelope));
+    spawnSync.mockReturnValue({
+      stdout: JSON.stringify(envelope),
+      stderr: "",
+      status: 0,
+      signal: null,
+      error: null,
+    });
 
     const result = summariseContent(extractedData);
 
@@ -156,7 +173,7 @@ describe("summariseContent", () => {
   });
 
   it("truncates very long content", () => {
-    execSync.mockReturnValue(JSON.stringify(claudeResponse));
+    spawnSync.mockReturnValue(makeSuccessResult(claudeResponse));
 
     const longData = {
       ...extractedData,
@@ -166,5 +183,48 @@ describe("summariseContent", () => {
     // Should not throw — content gets truncated internally.
     const result = summariseContent(longData);
     expect(result.title).toBe(claudeResponse.title);
+  });
+
+  it("passes model parameter to CLI args", () => {
+    spawnSync.mockReturnValue(makeSuccessResult(claudeResponse));
+
+    summariseContent(extractedData, "sonnet");
+
+    const args = spawnSync.mock.calls[0][1];
+    expect(args).toContain("--model");
+    const modelIndex = args.indexOf("--model");
+    expect(args[modelIndex + 1]).toBe("sonnet");
+  });
+
+  it("passes through custom model names not in MODEL_MAP", () => {
+    spawnSync.mockReturnValue(makeSuccessResult(claudeResponse));
+
+    summariseContent(extractedData, "claude-3-5-sonnet-20241022");
+
+    const args = spawnSync.mock.calls[0][1];
+    const modelIndex = args.indexOf("--model");
+    expect(args[modelIndex + 1]).toBe("claude-3-5-sonnet-20241022");
+  });
+
+  it("exports MODEL_MAP with valid shorthand names", () => {
+    expect(MODEL_MAP).toEqual({
+      haiku: "haiku",
+      sonnet: "sonnet",
+      opus: "opus",
+    });
+  });
+
+  it("handles non-zero exit status", () => {
+    spawnSync.mockReturnValue({
+      stdout: "",
+      stderr: "Some error occurred",
+      status: 1,
+      signal: null,
+      error: null,
+    });
+
+    expect(() => summariseContent(extractedData)).toThrow(
+      /Claude CLI failed.*Some error occurred/,
+    );
   });
 });
