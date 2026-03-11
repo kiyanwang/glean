@@ -19,6 +19,7 @@ export async function extractContent(url) {
   } catch (err) {
     throw new Error(
       `Failed to fetch URL: ${url} — ${err.message || String(err)}`,
+      { cause: err },
     );
   }
 
@@ -29,6 +30,7 @@ export async function extractContent(url) {
   } catch (err) {
     throw new Error(
       `Content extraction failed for ${url} — ${err.message || String(err)}`,
+      { cause: err },
     );
   }
 

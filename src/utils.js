@@ -61,7 +61,6 @@ export async function resolveUniqueFilename(baseName, folder) {
   let candidate = baseName;
   let counter = 1;
 
-  // eslint-disable-next-line no-constant-condition
   while (true) {
     const filePath = path.join(folder, `${candidate}.md`);
     try {

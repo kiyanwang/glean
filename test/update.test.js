@@ -2,8 +2,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { readFileSync } from "fs";
 import { fileURLToPath } from "url";
 import { dirname, join } from "path";
-import path from "path";
-import yaml from "yaml";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -34,7 +32,7 @@ vi.mock("fs/promises", () => ({
   copyFile: vi.fn(),
 }));
 
-const { readFile, writeFile, mkdir, readdir } = await import("fs/promises");
+const { readFile, writeFile, mkdir } = await import("fs/promises");
 const { generateNote } = await import("../src/note.js");
 const { findExistingNote } = await import("../src/store.js");
 
@@ -57,19 +55,6 @@ function buildExtractedData(overrides = {}) {
     url: "https://martinfowler.com/articles/platform-prerequisites.html",
     ...overrides,
   };
-}
-
-/** Parse YAML frontmatter from a note string. */
-function parseFrontmatter(noteContent) {
-  const match = noteContent.match(/^---\n([\s\S]*?)\n---/);
-  if (!match) throw new Error("No frontmatter found");
-  return yaml.parse(match[1]);
-}
-
-function enoentError() {
-  const err = new Error("ENOENT: no such file or directory");
-  err.code = "ENOENT";
-  return err;
 }
 
 // --- Tests -------------------------------------------------------------------
