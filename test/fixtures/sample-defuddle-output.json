@@ -1,0 +1,20 @@
+{
+  "content": "# Platform Prerequisites for Self-Service\n\nPlatform engineering has become a hot topic...\n\nOrganisations that want to offer self-service platforms need to invest in several prerequisite capabilities. These include documentation, golden paths, and clear service level objectives.\n\n## Documentation First\n\nThe foundation of any self-service platform is comprehensive documentation. Teams should be able to discover capabilities, understand how to use them, and troubleshoot issues without filing support tickets.\n\n## Golden Paths\n\nGolden paths provide opinionated, well-supported routes for common tasks. They reduce cognitive load by offering a recommended way to accomplish objectives while still allowing teams to deviate when needed.\n\n## Measuring Developer Satisfaction\n\nPlatform teams should treat developers as customers and actively measure their satisfaction. Surveys, NPS scores, and usage metrics all provide valuable signal about platform effectiveness.",
+  "title": "Platform Prerequisites for Self-Service",
+  "description": "Organizations need several prerequisites before offering self-service platforms",
+  "domain": "martinfowler.com",
+  "favicon": "https://martinfowler.com/favicon.ico",
+  "image": "https://martinfowler.com/articles/platform-prerequisites/card.png",
+  "language": "en",
+  "metaTags": [
+    { "name": "author", "property": null, "content": "Martin Fowler" },
+    { "name": "description", "property": null, "content": "Organizations need several prerequisites before offering self-service platforms" }
+  ],
+  "parseTime": 145,
+  "published": "2024-01-15",
+  "author": "Martin Fowler",
+  "site": "martinfowler.com",
+  "schemaOrgData": null,
+  "wordCount": 3200,
+  "extractorType": null
+}

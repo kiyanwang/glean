@@ -1,0 +1,84 @@
+filters:
+  and:
+    - file.inFolder("Glean")
+    - file.ext == "md"
+
+formulas:
+  days_since_gleaned: "(now() - gleaned) / \"1d\""
+  days_since_published: "(now() - published) / \"1d\""
+
+properties:
+  title:
+    displayName: Title
+  author:
+    displayName: Author
+  source:
+    displayName: Source
+  category:
+    displayName: Category
+  published:
+    displayName: Published
+  gleaned:
+    displayName: Gleaned
+  reading_time:
+    displayName: "Read Time (min)"
+  sentiment:
+    displayName: Type
+  topics:
+    displayName: Topics
+  url:
+    displayName: URL
+  word_count:
+    displayName: Words
+
+summaries:
+  reading_time: "average(values)"
+  word_count: "sum(values)"
+
+views:
+  - name: All Articles
+    type: table
+    order:
+      - file.name
+      - title
+      - author
+      - source
+      - category
+      - published
+      - gleaned
+      - reading_time
+      - sentiment
+      - topics
+
+  - name: By Category
+    type: table
+    groupBy:
+      property: category
+      direction: ASC
+    order:
+      - file.name
+      - title
+      - author
+      - source
+      - published
+      - reading_time
+
+  - name: Recent
+    type: table
+    order:
+      - file.name
+      - title
+      - author
+      - category
+      - gleaned
+      - reading_time
+
+  - name: Cards
+    type: cards
+    order:
+      - file.name
+      - title
+      - author
+      - source
+      - category
+      - summary

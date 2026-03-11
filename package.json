@@ -1,0 +1,27 @@
+{
+  "name": "glean-cli",
+  "version": "1.0.0",
+  "description": "Article curation & summarisation tool for Obsidian",
+  "type": "module",
+  "bin": {
+    "glean": "./bin/glean.js"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
+  },
+  "dependencies": {
+    "commander": "^13.0.0",
+    "defuddle": "^0.12.0",
+    "jsdom": "^24.0.0",
+    "yaml": "^2.7.0",
+    "slugify": "^1.6.0"
+  },
+  "devDependencies": {
+    "vitest": "^3.0.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

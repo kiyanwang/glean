@@ -1,0 +1,18 @@
+{
+  "vault": "Knowledge Base",
+  "vaultPath": "/Users/you/Documents/Knowledge Base",
+  "folder": "Glean",
+  "defaultTags": ["glean"],
+  "model": "sonnet",
+  "categories": [
+    "engineering-management",
+    "tools-and-libraries",
+    "ai",
+    "software-engineering",
+    "leadership",
+    "devops",
+    "architecture",
+    "career",
+    "other"
+  ]
+}
