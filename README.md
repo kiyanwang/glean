@@ -22,6 +22,7 @@ URL -> defuddle (parse & extract) -> Claude (summarise) -> Obsidian (store & ind
 - **JSON output** -- emit structured data as JSON for integration with other tools
 - **Async by default** -- summarisation runs in a detached background worker, returning control to your terminal in 1-3 seconds with a macOS notification when the note is ready
 - **Job queue** -- durable SQLite-backed queue survives crashes, laptop sleep, and retries failed jobs automatically
+- **Tweet sharing** -- generate a tweet-length summary and open a pre-filled Twitter/X compose URL with `--tweet`
 - **Configurable** -- defaults for vault, folder, tags, model, and categories via `~/.gleanrc.json`
 
 ## Prerequisites
@@ -106,6 +107,7 @@ Options:
   --model <model>       AI model for summarisation (haiku, sonnet, opus)
   --config <path>       Path to config file
   --sync                Run synchronously (wait for summarisation) (default: false)
+  --tweet               Open a pre-filled tweet with the article summary (default: false)
   -h, --help            display help for command
 
 Commands:
@@ -166,6 +168,18 @@ Output the structured data as JSON:
 
 ```bash
 glean https://example.com/article --json
+```
+
+Share an article on Twitter/X with an AI-generated tweet:
+
+```bash
+glean https://example.com/article --tweet
+```
+
+This generates a ~170-character summary, appends the article URL, and opens the Twitter/X compose page in your browser. Works in both async (default) and sync modes. Combine with `--dry-run` to preview the tweet text without opening the browser:
+
+```bash
+glean https://example.com/article --tweet --dry-run
 ```
 
 ### Queue Management
@@ -283,6 +297,7 @@ glean/
 │   ├── db.js                  # SQLite connection singleton (WAL mode, schema)
 │   ├── queue.js               # Job queue operations (enqueue, claim, retry, clear)
 │   ├── worker.js              # Background worker process (processes queue, sends notifications)
+│   ├── tweet.js               # Tweet composition and browser intent helpers
 │   └── commands/
 │       ├── status.js           # glean status
 │       ├── retry.js            # glean retry
