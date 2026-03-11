@@ -3,6 +3,7 @@
 import { writeFileSync, unlinkSync, existsSync } from "fs";
 import { resolve } from "path";
 import { execSync } from "child_process";
+import { fileURLToPath } from "url";
 import path from "path";
 import os from "os";
 
@@ -163,13 +164,16 @@ async function main() {
   }
 }
 
-// Run the worker.
-main().catch((err) => {
-  process.stderr.write(`Worker fatal error: ${err.message}\n`);
-  removePidFile();
-  closeDb();
-  process.exit(1);
-});
+// Run the worker only when executed directly (not when imported by tests).
+const isMain = process.argv[1] && fileURLToPath(import.meta.url) === process.argv[1];
+if (isMain) {
+  main().catch((err) => {
+    process.stderr.write(`Worker fatal error: ${err.message}\n`);
+    removePidFile();
+    closeDb();
+    process.exit(1);
+  });
+}
 
 // Exported for testing.
 export { processJob, main, writePidFile, removePidFile, notify, PID_FILE };
