@@ -24,12 +24,6 @@
       ]
     },
     {
-      "name": "glean-url-form",
-      "title": "Glean URL (Advanced)",
-      "description": "Glean a URL with custom options (category, tags, model)",
-      "mode": "view"
-    },
-    {
       "name": "queue-status",
       "title": "Glean Queue Status",
       "description": "View the status of queued glean jobs",

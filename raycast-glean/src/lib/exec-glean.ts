@@ -100,6 +100,7 @@ export function buildGleanArgs(
     sync?: boolean;
     update?: boolean;
     open?: boolean;
+    tweet?: boolean;
   } = {},
 ): string[] {
   const args: string[] = [url];
@@ -121,6 +122,9 @@ export function buildGleanArgs(
   }
   if (options.update) {
     args.push("--update");
+  }
+  if (options.tweet) {
+    args.push("--tweet");
   }
 
   return args;
