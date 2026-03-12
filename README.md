@@ -1,8 +1,16 @@
-# Glean
+<p align="center">
+  <img src="raycast-glean/assets/Glean-icon.png" alt="Glean" width="128" height="128">
+</p>
 
-Capture web articles as rich Obsidian notes with AI-generated summaries.
+<h1 align="center">Glean</h1>
 
-[![CI](https://github.com/kiyanwang/glean/actions/workflows/ci.yml/badge.svg)](https://github.com/kiyanwang/glean/actions/workflows/ci.yml)
+<p align="center">
+  Capture web articles as rich Obsidian notes with AI-generated summaries.
+</p>
+
+<p align="center">
+  <a href="https://github.com/kiyanwang/glean/actions/workflows/ci.yml"><img src="https://github.com/kiyanwang/glean/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+</p>
 
 ## Overview
 
@@ -394,6 +402,24 @@ Glean automatically deploys a `Glean.base` file into the notes folder, providing
 
 Open the `.base` file in Obsidian to browse, search, sort, and filter your article library.
 
+## Raycast Extension
+
+Glean ships with a [Raycast](https://raycast.com/) extension that lets you capture articles without opening a terminal. See a URL in your browser, invoke Raycast, type "glean", and it's captured to Obsidian instantly.
+
+**Commands:**
+
+| Command | Description |
+|---------|-------------|
+| **Glean URL** | Capture the current browser tab, clipboard URL, or a typed URL |
+| **Glean URL (Advanced)** | Form with per-URL overrides (category, tags, model, update) |
+| **Glean Queue Status** | Live job list with status icons, retry actions, and direct links to notes |
+| **Retry Failed Jobs** | Re-queue all failed jobs |
+| **Clear Queue** | Remove completed and failed jobs |
+
+**URL auto-detection:** The extension resolves URLs from (1) a typed argument, (2) the active browser tab via Raycast Browser Extension, or (3) the system clipboard.
+
+**Setup & documentation:** See the [raycast-glean README](raycast-glean/README.md) for installation and configuration.
+
 ## Development
 
 ### Running Tests
@@ -435,6 +461,16 @@ glean/
 │   │   ├── retry.test.js
 │   │   └── clear.test.js
 │   └── fixtures/              # Sample data for tests
+├── raycast-glean/              # Raycast extension (see raycast-glean/README.md)
+│   ├── src/
+│   │   ├── glean-url.ts        # Primary no-view command
+│   │   ├── glean-url-form.tsx   # Advanced form with options
+│   │   ├── queue-status.tsx     # Queue status list view
+│   │   ├── retry-jobs.ts       # Retry failed jobs
+│   │   ├── clear-jobs.ts       # Clear queue
+│   │   └── lib/                # Shared helpers (exec, URL resolution, config, types)
+│   ├── assets/
+│   └── package.json
 ├── .gleanrc.json.example      # Example configuration
 ├── package.json
 └── vitest.config.js
