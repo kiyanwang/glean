@@ -18,8 +18,6 @@ declare type Preferences = ExtensionPreferences
 declare namespace Preferences {
   /** Preferences accessible in the `glean-url` command */
   export type GleanUrl = ExtensionPreferences & {}
-  /** Preferences accessible in the `glean-url-form` command */
-  export type GleanUrlForm = ExtensionPreferences & {}
   /** Preferences accessible in the `queue-status` command */
   export type QueueStatus = ExtensionPreferences & {}
   /** Preferences accessible in the `retry-jobs` command */
@@ -34,8 +32,6 @@ declare namespace Arguments {
   /** URL (or leave empty for browser/clipboard) */
   "url": string
 }
-  /** Arguments passed to the `glean-url-form` command */
-  export type GleanUrlForm = {}
   /** Arguments passed to the `queue-status` command */
   export type QueueStatus = {}
   /** Arguments passed to the `retry-jobs` command */

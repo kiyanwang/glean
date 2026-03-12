@@ -1,4 +1,4 @@
-import { BrowserExtension, Clipboard } from "@raycast/api";
+import { Clipboard } from "@raycast/api";
 
 /**
  * Validate that `text` is a well-formed HTTP(S) URL.
@@ -31,8 +31,7 @@ function validateUrl(text: string | undefined | null): string | null {
  * Resolve the URL to glean using the following priority chain:
  *
  * 1. Explicit argument (e.g. typed into Raycast search bar).
- * 2. Active browser tab via Raycast Browser Extension API.
- * 3. System clipboard contents.
+ * 2. System clipboard contents.
  *
  * @param argumentUrl - Optional URL passed as a Raycast command argument.
  * @returns A validated `http:` or `https:` URL string.
@@ -45,21 +44,7 @@ export async function resolveUrl(argumentUrl?: string): Promise<string> {
     return fromArgument;
   }
 
-  // 2. Active browser tab (requires Raycast Browser Extension).
-  try {
-    const tabs = await BrowserExtension.getTabs();
-    const activeTab = tabs.find((tab) => tab.active);
-    if (activeTab) {
-      const fromBrowser = validateUrl(activeTab.url);
-      if (fromBrowser) {
-        return fromBrowser;
-      }
-    }
-  } catch {
-    // Browser extension not installed or not available — continue.
-  }
-
-  // 3. Clipboard contents.
+  // 2. Clipboard contents.
   try {
     const clipboardText = await Clipboard.readText();
     const fromClipboard = validateUrl(clipboardText);
@@ -67,7 +52,7 @@ export async function resolveUrl(argumentUrl?: string): Promise<string> {
       return fromClipboard;
     }
   } catch {
-    // Clipboard access failed — continue to error.
+    // Clipboard access failed — continue.
   }
 
   throw new Error(

@@ -13,7 +13,7 @@ export default async function Command(props: LaunchProps<{ arguments: { url?: st
       message: hostname,
     });
 
-    const args = buildGleanArgs(url);
+    const args = buildGleanArgs(url, { tweet: true });
     const { stderr } = await execGlean(args);
 
     const queuedLine = stderr.split("\n").find((line) => line.startsWith("Queued: "));
@@ -28,7 +28,7 @@ export default async function Command(props: LaunchProps<{ arguments: { url?: st
       await showToast({
         style: Toast.Style.Failure,
         title: "Note Already Exists",
-        message: "Use the Advanced form with the Update option to overwrite",
+        message: "Re-run with --update to overwrite",
       });
     } else if (message.includes("Invalid URL")) {
       await showToast({
