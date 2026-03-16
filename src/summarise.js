@@ -114,7 +114,7 @@ Generate a structured summary with the following fields:
 - category: One of: engineering-management, tools-and-libraries, ai, software-engineering, leadership, devops, architecture, career, other
 - readingTimeMinutes: Estimated reading time of the original article
 - sentiment: One of: informative, opinion, tutorial, case-study, research, news
-- tweetSummary: A compelling tweet-length summary of the article (maximum 170 characters, no hashtags, no URL — the URL will be appended automatically)`;
+- tweetSummary: A compelling summary of the article (maximum 2000 characters, no hashtags, no URL — the URL will be appended automatically)`;
 }
 
 /**
