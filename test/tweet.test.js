@@ -13,11 +13,11 @@ describe("composeTweet", () => {
     expect(result).toBe("Great article https://example.com");
   });
 
-  it("truncates text over 170 chars with ellipsis", () => {
-    const longSummary = "A".repeat(200);
+  it("truncates text over 2000 chars with ellipsis", () => {
+    const longSummary = "A".repeat(2500);
     const result = composeTweet(longSummary, "https://example.com");
     const textPart = result.split(" https://example.com")[0];
-    expect(textPart.length).toBe(170);
+    expect(textPart.length).toBe(2000);
     expect(textPart.endsWith("...")).toBe(true);
   });
 

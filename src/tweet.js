@@ -1,6 +1,6 @@
 import { execSync } from 'child_process';
 
-const MAX_TWEET_TEXT_LENGTH = 170;
+const MAX_TWEET_TEXT_LENGTH = 2000;
 
 /**
  * Compose tweet text from a summary and URL.
